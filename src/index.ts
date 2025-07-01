@@ -51,6 +51,47 @@ const handlePostItem = async (request: Request): Promise<Response> => {
   }
 };
 
+const handleGetPlan = async (): Promise<Response> => {
+  try {
+    await mealime.login();
+  } catch (_) {
+    return new Response("Login failed", { status: 500 });
+  }
+
+  try {
+    const mealPlanResult = await mealime.getMealPlan();
+    return new Response(JSON.stringify(mealPlanResult.result), { 
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof CsrfError ||
+      error instanceof Deno.errors.PermissionDenied
+    ) {
+      // retry once
+      try {
+        console.log("Error while fetching meal plan, trying reset");
+        await mealime.reset();
+        const mealPlanResult = await mealime.getMealPlan();
+        return new Response(JSON.stringify(mealPlanResult.result), { 
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      } catch (resetError) {
+        console.error("Reset didn't work", resetError);
+        return new Response("Reset didn't work", { status: 500 });
+      }
+    }
+    console.error("Unexpected error");
+    return new Response("Unexpected error", { status: 500 });
+  }
+};
+
 const handler = async (request: Request): Promise<Response> => {
   const path = new URL(request.url).pathname;
 
@@ -71,6 +112,10 @@ const handler = async (request: Request): Promise<Response> => {
   // Route to endpoint
   if (request.method === "POST" && path === "/add") {
     return await handlePostItem(request);
+  }
+
+  if (request.method === "GET" && path === "/getplan") {
+    return await handleGetPlan();
   }
 
   if (request.method === "POST" && path === "/reset") {
